@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Dimensions, Animated, StyleSheet, Modal } from "react-native";
+import { View, Text, TouchableOpacity, Dimensions, Animated, StyleSheet, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { Info, Play, Pause, RotateCcw, SkipForward, ArrowLeft, Target, CheckCircle2, PartyPopper } from "lucide-react-native";
@@ -20,7 +20,7 @@ const ARC_LENGTH = CIRCUMFERENCE * 0.75;
 const GAP_LENGTH = CIRCUMFERENCE * 0.25;
 
 export default function FocusScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const route = useRoute<RouteProp<Record<string, { duration?: number, taskId?: number, taskColor?: string, taskTitle?: string }>, string>>();
     const { setTaskStatus } = useTaskManager();
     const { timeLeft, isActive, durationMins, stopTimer, resumeTimer, endTimer, resetTimer: contextResetTimer, activeTaskId } = useTimer();
@@ -68,19 +68,7 @@ export default function FocusScreen() {
     };
 
     const handleKeepItUp = () => {
-        setShowSuccessModal(false);
-        // Small delay to ensure modal is dismissed before navigation
-        setTimeout(() => {
-            // @ts-ignore
-            if (navigation.canGoBack()) {
-                // If we can go back, try that first, otherwise navigate explicitly
-                // @ts-ignore
-                navigation.navigate("FocusSetupScreen");
-            } else {
-                // @ts-ignore
-                navigation.navigate("FocusSetupScreen");
-            }
-        }, 150);
+        navigation.replace("FocusSetupScreen");
     };
 
     const toggleTimer = () => {
@@ -123,9 +111,6 @@ export default function FocusScreen() {
                 <Text style={{ color: theme.text, fontFamily: theme.fonts[600], fontSize: 20 }}>
                     Focus Timer
                 </Text>
-                <TouchableOpacity style={{ padding: 8, backgroundColor: theme.text + "10", borderRadius: 20 }}>
-                    <Info color={theme.text} size={20} />
-                </TouchableOpacity>
             </View>
 
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -267,15 +252,10 @@ export default function FocusScreen() {
                 </View>
             )}
 
-            {/* Success Modal */}
-            <Modal
-                visible={showSuccessModal}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowSuccessModal(false)}
-            >
+            {/* Success Overlay — plain View avoids Modal lifecycle conflicts with navigation */}
+            {showSuccessModal && (
                 <View style={styles.modalOverlay}>
-                    <Animated.View style={styles.modalContent}>
+                    <View style={styles.modalContent}>
                         <View style={[styles.iconContainer, { backgroundColor: primaryColor + "20" }]}>
                             <CheckCircle2 color={primaryColor} size={48} />
                         </View>
@@ -285,28 +265,28 @@ export default function FocusScreen() {
                             Great work! You've stayed focused and reached your goal.
                         </Text>
 
-                        <TouchableOpacity
+                        <Pressable
                             style={[styles.modalButton, { backgroundColor: primaryColor }]}
                             onPress={handleKeepItUp}
-                            activeOpacity={0.8}
                         >
                             <PartyPopper color={theme.background} size={20} />
                             <Text style={styles.buttonText}>Keep it up</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
+                        </Pressable>
+                    </View>
                 </View>
-            </Modal>
+            )}
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.7)",
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.85)",
         justifyContent: "center",
         alignItems: "center",
-        padding: 24
+        padding: 24,
+        zIndex: 9998,
     },
     modalContent: {
         backgroundColor: theme.background,
