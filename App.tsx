@@ -7,6 +7,7 @@ import FocusSetupScreen from "./src/screens/FocusSetupScreen";
 import FocusScreen from "./src/screens/FocusScreen";
 import customTheme from "./src/data/color-theme";
 import { TimerProvider } from "./src/context/TimerContext";
+import GlobalCelebration from "./src/components/GlobalCelebration";
 
 const AppTheme = {
   ...DefaultTheme,
@@ -25,6 +26,7 @@ export default function App(): JSX.Element {
     <TimerProvider>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <NavigationContainer theme={AppTheme}>
+        <GlobalCelebration />
         <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: customTheme.background } }}>
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="FocusSetupScreen" component={FocusSetupScreen} />
@@ -32,5 +34,6 @@ export default function App(): JSX.Element {
         </Stack.Navigator>
       </NavigationContainer>
     </TimerProvider>
+
   );
 }

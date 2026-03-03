@@ -1,13 +1,11 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { ChevronLeft, ChevronRight, Flame } from "lucide-react-native";
 import theme from "../data/color-theme";
 import { useStreak, toDateKey, StreakLog } from "../hooks/useStreak";
-
-const TASKS_STORAGE_KEY = "@myapp_tasks_data";
+import { useTaskManager } from "../hooks/useTaskManager";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MONTH_NAMES = [
@@ -83,28 +81,13 @@ function DayCell({ day, dateKey, log, isToday, isFuture }: DayCellProps) {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function CalendarScreen() {
-    const [tasks, setTasks] = useState<any[]>([]);
+    const { tasks } = useTaskManager();
     const today = new Date();
     const [viewYear, setViewYear] = useState(today.getFullYear());
     const [viewMonth, setViewMonth] = useState(today.getMonth());
     const [selectedDayInfo, setSelectedDayInfo] = useState<{ day: number, count: number, dateKey: string } | null>(null);
 
     const { currentStreak, log } = useStreak(tasks);
-
-    useFocusEffect(
-        React.useCallback(() => {
-            AsyncStorage.getItem(TASKS_STORAGE_KEY).then(raw => {
-                if (!raw) return setTasks([]);
-                const parsed = JSON.parse(raw).map((t: any) => ({
-                    ...t,
-                    dueDate: new Date(t.dueDate),
-                    createdAt: new Date(t.createdAt),
-                    updatedAt: new Date(t.updatedAt),
-                }));
-                setTasks(parsed);
-            });
-        }, [])
-    );
 
     const daysInMonth = getDaysInMonth(viewYear, viewMonth);
     const firstDayOfWeek = getFirstDayOfWeek(viewYear, viewMonth);
@@ -140,12 +123,6 @@ export default function CalendarScreen() {
         ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
     ];
     while (cells.length % 7 !== 0) cells.push(null);
-
-    const stats = [
-        { label: "Day Streak", value: currentStreak, accent: "#FF8C00" },
-        { label: "Perfect Days", value: perfectDays, accent: "#34D399" },
-        { label: "Tasks Done", value: totalDone, accent: theme.primary[3] },
-    ];
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top", "left", "right"]}>
@@ -188,9 +165,8 @@ export default function CalendarScreen() {
                             </View>
                         </View>
 
-                        {/* streak number block — mirrors home "XX tasks" layout */}
+                        {/* streak number block */}
                         <View style={{ marginTop: 32 }}>
-
                             <Text style={{ fontFamily: theme.fonts[400], fontSize: 32, lineHeight: 44, color: theme.background }}>
                                 You have{" "}
                                 <Text style={{ fontFamily: theme.fonts[700] }}>
@@ -201,14 +177,11 @@ export default function CalendarScreen() {
                                 <Text style={{ fontFamily: theme.fonts[600], color: theme.background }}>
                                     in a row ~ {""}
                                 </Text>
-
                                 {currentStreak === 0 ? "start today! 🌱" : "keep it up 🔥"}
                             </Text>
                         </View>
                     </View>
                 </View>
-
-
 
                 {/* ── Calendar card ────────────────────────────── */}
                 <View style={{
@@ -220,7 +193,6 @@ export default function CalendarScreen() {
                     borderWidth: 1,
                     borderColor: theme.white + "10",
                 }}>
-                    {/* Month nav row */}
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
                         <TouchableOpacity onPress={prevMonth} style={{
                             width: 36, height: 36, borderRadius: 18,
@@ -248,7 +220,6 @@ export default function CalendarScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Day-of-week labels */}
                     <View style={{ flexDirection: "row", marginBottom: 6 }}>
                         {DAY_LABELS.map((d, i) => (
                             <View key={i} style={{ flex: 1, alignItems: "center" }}>
@@ -259,7 +230,6 @@ export default function CalendarScreen() {
                         ))}
                     </View>
 
-                    {/* Grid */}
                     {Array.from({ length: cells.length / 7 }, (_, row) => (
                         <View key={row} style={{ flexDirection: "row" }}>
                             {cells.slice(row * 7, row * 7 + 7).map((day, col) => {
@@ -279,7 +249,6 @@ export default function CalendarScreen() {
                         </View>
                     ))}
 
-                    {/* Legend */}
                     <View style={{ flexDirection: "row", gap: 24, marginTop: 24, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
                         {[
                             { dot: "#34D399", label: "All done" },
@@ -295,7 +264,6 @@ export default function CalendarScreen() {
                         ))}
                     </View>
                 </View>
-
 
                 {/* ── Month Bar Graph ──────────────────────────── */}
                 <View style={{ paddingHorizontal: theme.padding.paddingMainX, marginTop: 14 }}>
@@ -322,13 +290,8 @@ export default function CalendarScreen() {
                                 const dateKey = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                                 const completed = log[dateKey]?.completed || 0;
                                 const isToday = dateKey === todayKey;
-
-                                // Calculate height percentage bounded between 4% (empty) and 100% (max completed)
                                 const hPercent = completed > 0 ? Math.max(15, (completed / maxCompletedInMonth) * 100) : 4;
-
-                                const barColor = isToday ? theme.primary[3]
-                                    : completed > 0 ? theme.primary[4]
-                                        : theme.white + "10";
+                                const barColor = isToday ? theme.primary[3] : completed > 0 ? theme.primary[4] : theme.white + "10";
 
                                 return (
                                     <TouchableOpacity
@@ -350,15 +313,9 @@ export default function CalendarScreen() {
                         </View>
 
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 12 }}>
-                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 11, color: theme.text + "40" }}>
-                                1
-                            </Text>
-                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 11, color: theme.text + "40" }}>
-                                {Math.floor(daysInMonth / 2)}
-                            </Text>
-                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 11, color: theme.text + "40" }}>
-                                {daysInMonth}
-                            </Text>
+                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 11, color: theme.text + "40" }}>1</Text>
+                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 11, color: theme.text + "40" }}>{Math.floor(daysInMonth / 2)}</Text>
+                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 11, color: theme.text + "40" }}>{daysInMonth}</Text>
                         </View>
                     </View>
                 </View>

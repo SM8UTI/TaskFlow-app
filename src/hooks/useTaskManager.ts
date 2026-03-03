@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { NewTaskData } from '../components/AddTaskBottomSheet';
+import { encryptObject, decryptObject } from '../utils/security';
 
 const TASKS_STORAGE_KEY = '@myapp_tasks_data';
 
@@ -19,7 +20,12 @@ const getTomorrow = (): Date => {
 export function useTaskManager() {
   const [tasks, setTasks] = useState<any[]>([]);
 
-  // Load tasks whenever the screen is focused
+  // Initial load on mount
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  // Reload tasks whenever the screen is focused
   useFocusEffect(
     useCallback(() => {
       loadTasks();
@@ -30,7 +36,25 @@ export function useTaskManager() {
     try {
       const storedTasks = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
       if (storedTasks) {
-        const parsed = JSON.parse(storedTasks);
+        let parsed: any[];
+
+        // Try to decrypt. If it fails or returns null, it might be unencrypted legacy data.
+        const decrypted = decryptObject(storedTasks);
+        if (decrypted) {
+          parsed = decrypted;
+        } else {
+          // Fallback to direct parsing for legacy non-encrypted data
+          try {
+            parsed = JSON.parse(storedTasks);
+            console.log(
+              'Loaded unencrypted legacy data, will encrypt on next save',
+            );
+          } catch (e) {
+            console.error('Failed to parse tasks', e);
+            parsed = [];
+          }
+        }
+
         let migrated = false;
         // Reconstruct Date objects after JSON parse
         const formattedTasks = parsed.map((t: any) => {
@@ -47,19 +71,34 @@ export function useTaskManager() {
             updatedAt: new Date(t.updatedAt),
           };
         });
+
+        // Auto-cleanup: remove completed tasks from previous days
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const initialCount = formattedTasks.length;
+        const cleanedTasks = formattedTasks.filter(t => {
+          if (t.status === 'completed' || t.isCompleted) {
+            const completedDate = new Date(t.updatedAt);
+            return completedDate >= startOfToday;
+          }
+          return true;
+        });
+
+        const cleaned = cleanedTasks.length !== initialCount;
+
         // Sort by newest first
-        formattedTasks.sort(
+        cleanedTasks.sort(
           (a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime(),
         );
 
-        if (migrated) {
-          await AsyncStorage.setItem(
-            TASKS_STORAGE_KEY,
-            JSON.stringify(formattedTasks),
-          );
+        // If migrated, loaded unencrypted, or tasks were cleaned, save as encrypted
+        if (migrated || !decrypted || cleaned) {
+          const encrypted = encryptObject(cleanedTasks);
+          await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
         }
 
-        setTasks(formattedTasks);
+        setTasks(cleanedTasks);
       } else {
         setTasks([]);
       }
@@ -90,10 +129,8 @@ export function useTaskManager() {
     onSuccess?.();
 
     try {
-      await AsyncStorage.setItem(
-        TASKS_STORAGE_KEY,
-        JSON.stringify(updatedTasks),
-      );
+      const encrypted = encryptObject(updatedTasks);
+      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
     } catch (error) {
       console.error('Failed to save task', error);
     }
@@ -107,10 +144,8 @@ export function useTaskManager() {
     setTasks(filteredTasks);
     onTaskDeleted?.(taskId);
     try {
-      await AsyncStorage.setItem(
-        TASKS_STORAGE_KEY,
-        JSON.stringify(filteredTasks),
-      );
+      const encrypted = encryptObject(filteredTasks);
+      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
     } catch (error) {
       console.error('Failed to delete task', error);
     }
@@ -122,17 +157,20 @@ export function useTaskManager() {
   ) => {
     const updatedTasks = tasks.map(t => {
       if (t.id === taskId) {
-        return { ...t, isCompleted: true, status: 'completed' };
+        return {
+          ...t,
+          isCompleted: true,
+          status: 'completed',
+          updatedAt: new Date(),
+        };
       }
       return t;
     });
     setTasks(updatedTasks);
     onToggled?.(taskId);
     try {
-      await AsyncStorage.setItem(
-        TASKS_STORAGE_KEY,
-        JSON.stringify(updatedTasks),
-      );
+      const encrypted = encryptObject(updatedTasks);
+      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
     } catch (error) {
       console.error('Failed to toggle task', error);
     }
@@ -160,10 +198,8 @@ export function useTaskManager() {
     setTasks(updatedTasks);
     onDone?.();
     try {
-      await AsyncStorage.setItem(
-        TASKS_STORAGE_KEY,
-        JSON.stringify(updatedTasks),
-      );
+      const encrypted = encryptObject(updatedTasks);
+      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
     } catch (error) {
       console.error('Failed to set task status', error);
     }

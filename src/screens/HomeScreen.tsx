@@ -4,35 +4,16 @@ import theme from "../data/color-theme";
 import HeaderHeroScreen from "../layouts/homeScreen/Header";
 import TodayRecentTasks from "../layouts/homeScreen/TodayRecentTasks";
 import { useStreak } from "../hooks/useStreak";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTaskManager } from "../hooks/useTaskManager";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { WidgetPreview } from "react-native-android-widget";
 import { TaskWidgetAndroid } from "../widget/TaskWidget";
 import StartTimerList from "../layouts/homeScreen/StartTimerList";
-
-const TASKS_KEY = "@myapp_tasks_data";
+import { PrivacyStatus } from "../components/PrivacyStatus";
 
 export default function HomeScreen() {
-    const [tasks, setTasks] = useState<any[]>([]);
-
-    useFocusEffect(
-        useCallback(() => {
-            AsyncStorage.getItem(TASKS_KEY).then(raw => {
-                if (!raw) return setTasks([]);
-                const parsed = JSON.parse(raw).map((t: any) => ({
-                    ...t,
-                    dueDate: new Date(t.dueDate),
-                    createdAt: new Date(t.createdAt),
-                    updatedAt: new Date(t.updatedAt),
-                }));
-                // Sort by newest first
-                parsed.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
-                setTasks(parsed);
-            });
-        }, [])
-    );
-
+    const { tasks } = useTaskManager();
     const { currentStreak } = useStreak(tasks);
 
     // Get today's recent task or any active task

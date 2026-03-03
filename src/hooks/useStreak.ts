@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { encryptObject, decryptObject } from '../utils/security';
 
 const STREAK_LOG_KEY = '@myapp_streak_log';
 
@@ -37,7 +38,6 @@ const computeStreak = (log: StreakLog): number => {
       // Days with NO tasks are skipped (don't break streak)
       if (record && record.total > 0) break;
       // No tasks that day → don't break, but also don't count — keep walking back
-      // But stop after 30 no-task days (avoid infinite streak from long gap)
       if (!record && i > 0) break;
     }
     cursor.setDate(cursor.getDate() - 1);
@@ -66,23 +66,34 @@ export function useStreak(tasks: any[]) {
   useEffect(() => {
     AsyncStorage.getItem(STREAK_LOG_KEY).then(raw => {
       if (raw) {
-        const parsed = JSON.parse(raw) as StreakLog;
-        setLog(parsed);
-        setCurrentStreak(computeStreak(parsed));
+        let parsed: StreakLog | null = decryptObject(raw);
+        if (!parsed) {
+          try {
+            parsed = JSON.parse(raw) as StreakLog;
+          } catch (e) {
+            parsed = null;
+          }
+        }
+
+        if (parsed) {
+          setLog(parsed);
+          setCurrentStreak(computeStreak(parsed));
+        }
       }
     });
   }, []);
 
   // Re-compute today's record whenever tasks change
   useEffect(() => {
-    if (tasks.length === 0) return;
+    if (!tasks || tasks.length === 0) return;
 
     const todayKey = toDateKey(new Date());
 
     // All tasks whose dueDate falls on today
     const todayTasks = tasks.filter(t => {
       try {
-        return toDateKey(new Date(t.dueDate)) === todayKey;
+        const d = t.dueDate instanceof Date ? t.dueDate : new Date(t.dueDate);
+        return toDateKey(d) === todayKey;
       } catch {
         return false;
       }
@@ -106,10 +117,9 @@ export function useStreak(tasks: any[]) {
         [todayKey]: { date: todayKey, total, completed },
       };
 
-      // Persist async
-      AsyncStorage.setItem(STREAK_LOG_KEY, JSON.stringify(updated)).catch(
-        () => {},
-      );
+      // Persist async with encryption
+      const encrypted = encryptObject(updated);
+      AsyncStorage.setItem(STREAK_LOG_KEY, encrypted).catch(() => {});
       setCurrentStreak(computeStreak(updated));
       return updated;
     });

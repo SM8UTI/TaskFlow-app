@@ -1,17 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { encryptObject, decryptObject } from '../utils/security';
 
 type TimerContextType = {
     activeTaskId: number | null;
     timeLeft: number;
     isActive: boolean;
     durationMins: number;
+    completedWhileAway: boolean;
     startTimer: (taskId: number | null, duration: number) => void;
     stopTimer: () => void;
     resumeTimer: () => void;
     endTimer: () => void;
     resetTimer: () => void;
+    clearCompletedWhileAway: () => void;
 };
 
 const TimerContext = createContext<TimerContextType | undefined>(undefined);
@@ -23,6 +26,20 @@ export function TimerProvider({ children }: { children: ReactNode }) {
     const [isActive, setIsActive] = useState(false);
     const [durationMins, setDurationMins] = useState(0);
     const [endTime, setEndTime] = useState<number | null>(null);
+    const [completedWhileAway, setCompletedWhileAway] = useState(false);
+
+    const stateRef = useRef({ activeTaskId, timeLeft, isActive, durationMins, endTime, completedWhileAway });
+    useEffect(() => {
+        stateRef.current = { activeTaskId, timeLeft, isActive, durationMins, endTime, completedWhileAway };
+    }, [activeTaskId, timeLeft, isActive, durationMins, endTime, completedWhileAway]);
+
+    const saveTimerState = async (customState?: any) => {
+        try {
+            const dataToSave = customState || stateRef.current;
+            const encrypted = encryptObject(dataToSave);
+            await AsyncStorage.setItem(TIMER_STORAGE_KEY, encrypted);
+        } catch (error) { }
+    };
 
     // Initial load
     useEffect(() => {
@@ -30,43 +47,51 @@ export function TimerProvider({ children }: { children: ReactNode }) {
             try {
                 const stored = await AsyncStorage.getItem(TIMER_STORAGE_KEY);
                 if (stored) {
-                    const data = JSON.parse(stored);
-                    setActiveTaskId(data.activeTaskId);
-                    setDurationMins(data.durationMins);
-
-                    if (data.isActive && data.endTime) {
-                        const now = Date.now();
-                        if (now >= data.endTime) {
-                            setTimeLeft(0);
-                            setIsActive(false);
-                            setEndTime(null);
-                        } else {
-                            setTimeLeft(Math.floor((data.endTime - now) / 1000));
-                            setIsActive(true);
-                            setEndTime(data.endTime);
+                    let data: any = decryptObject(stored);
+                    if (!data) {
+                        try {
+                            data = JSON.parse(stored);
+                        } catch (e) {
+                            data = null;
                         }
-                    } else {
-                        setTimeLeft(data.timeLeft || 0);
-                        setIsActive(data.isActive || false);
-                        setEndTime(data.endTime || null);
+                    }
+
+                    if (data) {
+                        setActiveTaskId(data.activeTaskId);
+                        setDurationMins(data.durationMins);
+
+                        let finalCompletedWhileAway = data.completedWhileAway || false;
+                        let finalIsActive = data.isActive || false;
+                        let finalEndTime = data.endTime || null;
+                        let finalTimeLeft = data.timeLeft || 0;
+
+                        if (data.isActive && data.endTime) {
+                            const now = Date.now();
+                            if (now >= data.endTime) {
+                                finalTimeLeft = 0;
+                                finalIsActive = false;
+                                finalEndTime = null;
+                                finalCompletedWhileAway = true;
+                            } else {
+                                finalTimeLeft = Math.floor((data.endTime - now) / 1000);
+                            }
+                        }
+
+                        setTimeLeft(finalTimeLeft);
+                        setIsActive(finalIsActive);
+                        setEndTime(finalEndTime);
+                        setCompletedWhileAway(finalCompletedWhileAway);
+
+                        // Update storage if we just calculated completion
+                        if (finalCompletedWhileAway && !data.completedWhileAway) {
+                            saveTimerState({ ...data, timeLeft: 0, isActive: false, endTime: null, completedWhileAway: true });
+                        }
                     }
                 }
             } catch (error) { }
         };
         loadTimer();
     }, []);
-
-    const stateRef = useRef({ activeTaskId, timeLeft, isActive, durationMins, endTime });
-    useEffect(() => {
-        stateRef.current = { activeTaskId, timeLeft, isActive, durationMins, endTime };
-    }, [activeTaskId, timeLeft, isActive, durationMins, endTime]);
-
-    const saveTimerState = async (customState?: any) => {
-        try {
-            const dataToSave = customState || stateRef.current;
-            await AsyncStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(dataToSave));
-        } catch (error) { }
-    };
 
     // Handle AppState changes
     useEffect(() => {
@@ -79,7 +104,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
                         setTimeLeft(0);
                         setIsActive(false);
                         setEndTime(null);
-                        saveTimerState({ ...stateRef.current, timeLeft: 0, isActive: false, endTime: null });
+                        setCompletedWhileAway(true);
+                        saveTimerState({ ...stateRef.current, timeLeft: 0, isActive: false, endTime: null, completedWhileAway: true });
                     } else {
                         setTimeLeft(Math.floor((curEndTime - now) / 1000));
                     }
@@ -100,7 +126,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
                     setTimeLeft(0);
                     setIsActive(false);
                     setEndTime(null);
-                    saveTimerState({ ...stateRef.current, timeLeft: 0, isActive: false, endTime: null });
+                    setCompletedWhileAway(true);
+                    saveTimerState({ ...stateRef.current, timeLeft: 0, isActive: false, endTime: null, completedWhileAway: true });
                     if (interval) clearInterval(interval);
                 } else {
                     setTimeLeft(Math.floor((endTime - now) / 1000));
@@ -120,7 +147,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         setTimeLeft(seconds);
         setIsActive(true);
         setEndTime(newEndTime);
-        saveTimerState({ activeTaskId: taskId, durationMins: duration, timeLeft: seconds, isActive: true, endTime: newEndTime });
+        setCompletedWhileAway(false);
+        saveTimerState({ activeTaskId: taskId, durationMins: duration, timeLeft: seconds, isActive: true, endTime: newEndTime, completedWhileAway: false });
     };
 
     const stopTimer = () => {
@@ -141,7 +169,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         setTimeLeft(0);
         setEndTime(null);
         setActiveTaskId(null);
-        saveTimerState({ activeTaskId: null, durationMins: stateRef.current.durationMins, timeLeft: 0, isActive: false, endTime: null });
+        setCompletedWhileAway(false);
+        saveTimerState({ activeTaskId: null, durationMins: stateRef.current.durationMins, timeLeft: 0, isActive: false, endTime: null, completedWhileAway: false });
     };
 
     const resetTimer = () => {
@@ -149,11 +178,17 @@ export function TimerProvider({ children }: { children: ReactNode }) {
         setIsActive(false);
         setTimeLeft(seconds);
         setEndTime(null);
-        saveTimerState({ ...stateRef.current, timeLeft: seconds, isActive: false, endTime: null });
+        setCompletedWhileAway(false);
+        saveTimerState({ ...stateRef.current, timeLeft: seconds, isActive: false, endTime: null, completedWhileAway: false });
+    };
+
+    const clearCompletedWhileAway = () => {
+        setCompletedWhileAway(false);
+        saveTimerState({ ...stateRef.current, completedWhileAway: false });
     };
 
     return (
-        <TimerContext.Provider value={{ activeTaskId, timeLeft, isActive, durationMins, startTimer, stopTimer, resumeTimer, endTimer, resetTimer }}>
+        <TimerContext.Provider value={{ activeTaskId, timeLeft, isActive, durationMins, completedWhileAway, startTimer, stopTimer, resumeTimer, endTimer, resetTimer, clearCompletedWhileAway }}>
             {children}
         </TimerContext.Provider>
     );

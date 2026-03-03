@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     Text,
     View,
@@ -19,13 +18,14 @@ import { Calendar1, Plus, CircleArrowOutUpRight } from "lucide-react-native";
 import TaskDetailsInfo from "../../components/TaskDetailsInfo";
 import AddTaskBottomSheet, { NewTaskData } from "../../components/AddTaskBottomSheet";
 import AnimatedIconButton from "../../components/AnimatedIconButton";
-import TaskCard from "../../components/TaskCard";
 import { routeNames } from "../../navigation/TabNavigator";
+import { useTaskManager } from "../../hooks/useTaskManager";
 
 
 function TodayRecentTasks() {
     const navigation = useNavigation<any>();
-    const [tasks, setTasks] = useState<any[]>([]);
+    const { tasks, saveNewTask, toggleTaskComplete, deleteTask } = useTaskManager();
+
     const [selectedTask, setSelectedTask] = useState<any | null>(null);
     const [sheetVisible, setSheetVisible] = useState(false);
     const [isAddSheetVisible, setAddSheetVisible] = useState(false);
@@ -33,101 +33,27 @@ function TodayRecentTasks() {
 
     const slideAnim = React.useRef(new Animated.Value(0)).current;
 
-    const saveNewTask = async (data: NewTaskData) => {
-        const newTask = {
-            id: Date.now(),
-            title: data.title,
-            description: data.description,
-            isCompleted: false,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            priority: data.priority,
-            category: "work",
-            status: data.status,
-            dueDate: data.dueDate,
-            tag: data.tag,
-            colorIndex: Math.floor(Math.random() * 3),
-        };
-
-        const updatedTasks = [newTask, ...tasks];
-        // Sort by newest first
-        updatedTasks.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
-        setTasks(updatedTasks);
+    const handleSaveTask = async (data: NewTaskData) => {
+        await saveNewTask(data);
         setAddSheetVisible(false);
-
-        try {
-            await AsyncStorage.setItem("@myapp_tasks_data", JSON.stringify(updatedTasks));
-        } catch (error) {
-            console.error("Failed to save task", error);
-        }
     };
 
-    useFocusEffect(
-        useCallback(() => {
-            loadTasks();
-        }, [])
-    );
-
-    const loadTasks = async () => {
-        try {
-            const storedTasks = await AsyncStorage.getItem("@myapp_tasks_data");
-            if (storedTasks) {
-                const parsed = JSON.parse(storedTasks);
-                let migrated = false;
-                const formattedTasks = parsed.map((t: any) => {
-                    let tColorIndex = t.colorIndex;
-                    if (tColorIndex === undefined) {
-                        tColorIndex = Math.floor(Math.random() * 3);
-                        migrated = true;
-                    }
-                    return {
-                        ...t,
-                        colorIndex: tColorIndex,
-                        dueDate: new Date(t.dueDate),
-                        createdAt: new Date(t.createdAt),
-                        updatedAt: new Date(t.updatedAt)
-                    }
-                });
-                formattedTasks.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
-                setTasks(formattedTasks);
-
-                if (migrated) {
-                    await AsyncStorage.setItem("@myapp_tasks_data", JSON.stringify(formattedTasks));
-                }
-            } else {
-                setTasks([]);
-            }
-        } catch (error) {
-            console.error("Failed to load tasks", error);
-            setTasks([]);
-        }
-    };
-
-    const toggleTaskComplete = async (taskId: number) => {
+    const handleToggleComplete = async (taskId: number) => {
         const task = tasks.find(t => t.id === taskId);
         if (task && task.status !== "completed") {
             setShowConfetti(true);
         }
-
-        const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, isCompleted: true, status: "completed" } : t);
-        setTasks(updatedTasks);
-        try {
-            await AsyncStorage.setItem("@myapp_tasks_data", JSON.stringify(updatedTasks));
-            if (selectedTask?.id === taskId) {
-                closeTaskSheet();
-            }
-        } catch (error) { }
+        await toggleTaskComplete(taskId);
+        if (selectedTask?.id === taskId) {
+            closeTaskSheet();
+        }
     };
 
-    const deleteTask = async (taskId: number) => {
-        const filteredTasks = tasks.filter(t => t.id !== taskId);
-        setTasks(filteredTasks);
-        try {
-            await AsyncStorage.setItem("@myapp_tasks_data", JSON.stringify(filteredTasks));
-            if (selectedTask?.id === taskId) {
-                closeTaskSheet();
-            }
-        } catch (error) { }
+    const handleDeleteTask = async (taskId: number) => {
+        await deleteTask(taskId);
+        if (selectedTask?.id === taskId) {
+            closeTaskSheet();
+        }
     };
 
     const openTaskSheet = (task: any) => {
@@ -208,16 +134,6 @@ function TodayRecentTasks() {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)
         .map(([tag]) => tag);
-
-    // Display logic: high-priority tasks (all), else max 2 medium
-    const todayHighTasks = todayTasks.filter(t => t.priority === "high");
-    const todayMediumTasks = todayTasks.filter(t => t.priority === "medium");
-    const displayTasks = todayHighTasks.length > 0
-        ? todayHighTasks
-        : todayMediumTasks.slice(0, 2);
-
-    // 2. Cycle colors
-    const taskColors = [theme.primary[1], theme.primary[3], theme.primary[4]];
 
     return (
         <View style={{ paddingHorizontal: theme.padding.paddingMainX, marginTop: 12 }}>
@@ -300,7 +216,6 @@ function TodayRecentTasks() {
                     behavior={Platform.OS === "ios" ? "padding" : undefined}
                     style={styles.modalWrapper}
                 >
-                    {/* Backdrop */}
                     <Animated.View style={[
                         styles.backdrop,
                         {
@@ -313,7 +228,6 @@ function TodayRecentTasks() {
                         <Pressable style={StyleSheet.absoluteFill} onPress={closeTaskSheet} />
                     </Animated.View>
 
-                    {/* Sheet */}
                     <Animated.View
                         {...panResponder.panHandlers}
                         style={[
@@ -328,15 +242,14 @@ function TodayRecentTasks() {
                             }
                         ]}
                     >
-                        {/* Drag handle */}
                         <View style={styles.handleBar} />
 
                         {selectedTask && (
                             <TaskDetailsInfo
                                 task={selectedTask}
                                 onClose={closeTaskSheet}
-                                onAdvanceStatus={() => toggleTaskComplete(selectedTask.id)}
-                                onDelete={() => deleteTask(selectedTask.id)}
+                                onAdvanceStatus={() => handleToggleComplete(selectedTask.id)}
+                                onDelete={() => handleDeleteTask(selectedTask.id)}
                             />
                         )}
 
@@ -345,14 +258,12 @@ function TodayRecentTasks() {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* ── Add Task Bottom Sheet Modal ── */}
             <AddTaskBottomSheet
                 visible={isAddSheetVisible}
                 onClose={() => setAddSheetVisible(false)}
-                onSave={saveNewTask}
+                onSave={handleSaveTask}
             />
 
-            {/* ── Confetti Celebration ── */}
             {showConfetti && (
                 <View style={[StyleSheet.absoluteFillObject, { pointerEvents: "none", zIndex: 9999 }]}>
                     <ConfettiCannon
