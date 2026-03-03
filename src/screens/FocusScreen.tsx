@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Dimensions, Animated, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, Dimensions, Animated, StyleSheet, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
-import { Info, Play, Pause, RotateCcw, SkipForward, ArrowLeft, Target } from "lucide-react-native";
+import { Info, Play, Pause, RotateCcw, SkipForward, ArrowLeft, Target, CheckCircle2, PartyPopper } from "lucide-react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import ConfettiCannon from "react-native-confetti-cannon";
 import theme from "../data/color-theme";
@@ -29,15 +29,17 @@ export default function FocusScreen() {
     // If the timer is active globally and matching the route params, we use the global values.
     // For simplicity, we assume FocusScreen displays the active timer if there is one, otherwise the setup values.
     const displayDurationMins = durationMins || route.params?.duration || 25;
-    const TOTAL_SECONDS = displayDurationMins * 60;
+    const TOTAL_SECONDS = Math.max(displayDurationMins * 60, 1);
     const taskId = activeTaskId || route.params?.taskId;
     const primaryColor = route.params?.taskColor || theme.primary[4];
     const taskTitle = route.params?.taskTitle || "Focus Time";
 
     const [showConfetti, setShowConfetti] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     // Animation value for progress
-    const animatedProgress = useRef(new Animated.Value(TOTAL_SECONDS)).current;
+    // Animation value for progress
+    const animatedProgress = useRef(new Animated.Value(timeLeft)).current;
 
     // Detect completion when timeLeft hits 0 naturally from an active state
     // We can do this by tracking previous time
@@ -59,9 +61,26 @@ export default function FocusScreen() {
 
     const handleCompletion = async () => {
         setShowConfetti(true);
+        setShowSuccessModal(true);
         if (taskId != null) {
             await setTaskStatus(taskId, "completed");
         }
+    };
+
+    const handleKeepItUp = () => {
+        setShowSuccessModal(false);
+        // Small delay to ensure modal is dismissed before navigation
+        setTimeout(() => {
+            // @ts-ignore
+            if (navigation.canGoBack()) {
+                // If we can go back, try that first, otherwise navigate explicitly
+                // @ts-ignore
+                navigation.navigate("FocusSetupScreen");
+            } else {
+                // @ts-ignore
+                navigation.navigate("FocusSetupScreen");
+            }
+        }, 150);
     };
 
     const toggleTimer = () => {
@@ -132,7 +151,7 @@ export default function FocusScreen() {
                             stroke={primaryColor}
                             strokeWidth={STROKE_WIDTH}
                             fill="none"
-                            strokeDasharray={CIRCUMFERENCE}
+                            strokeDasharray={`${ARC_LENGTH} ${CIRCUMFERENCE}`}
                             strokeDashoffset={dashOffset}
                             strokeLinecap="round"
                         />
@@ -168,7 +187,7 @@ export default function FocusScreen() {
                 }}>
                     {taskId && <Target color={primaryColor} size={18} />}
                     <Text style={{ color: theme.text, fontFamily: theme.fonts[500], fontSize: 16 }}>
-                        {taskTitle} ({durationMins}m)
+                        {taskTitle} ({displayDurationMins}m)
                     </Text>
                 </View>
             </View>
@@ -247,6 +266,99 @@ export default function FocusScreen() {
                     />
                 </View>
             )}
+
+            {/* Success Modal */}
+            <Modal
+                visible={showSuccessModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowSuccessModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <Animated.View style={styles.modalContent}>
+                        <View style={[styles.iconContainer, { backgroundColor: primaryColor + "20" }]}>
+                            <CheckCircle2 color={primaryColor} size={48} />
+                        </View>
+
+                        <Text style={styles.modalTitle}>Session Complete!</Text>
+                        <Text style={styles.modalSubtitle}>
+                            Great work! You've stayed focused and reached your goal.
+                        </Text>
+
+                        <TouchableOpacity
+                            style={[styles.modalButton, { backgroundColor: primaryColor }]}
+                            onPress={handleKeepItUp}
+                            activeOpacity={0.8}
+                        >
+                            <PartyPopper color={theme.background} size={20} />
+                            <Text style={styles.buttonText}>Keep it up</Text>
+                        </TouchableOpacity>
+                    </Animated.View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
+
+const styles = StyleSheet.create({
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.7)",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 24
+    },
+    modalContent: {
+        backgroundColor: theme.background,
+        borderRadius: 32,
+        padding: 32,
+        width: "100%",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: theme.text + "10",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 10
+    },
+    iconContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 24
+    },
+    modalTitle: {
+        fontSize: 28,
+        fontFamily: theme.fonts[700],
+        color: theme.text,
+        marginBottom: 12,
+        textAlign: "center"
+    },
+    modalSubtitle: {
+        fontSize: 16,
+        fontFamily: theme.fonts[400],
+        color: theme.text + "80",
+        textAlign: "center",
+        lineHeight: 24,
+        marginBottom: 32,
+        paddingHorizontal: 12
+    },
+    modalButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 20,
+        gap: 10,
+        width: "100%"
+    },
+    buttonText: {
+        color: theme.background,
+        fontSize: 18,
+        fontFamily: theme.fonts[600]
+    }
+});
