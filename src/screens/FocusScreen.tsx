@@ -8,6 +8,7 @@ import ConfettiCannon from "react-native-confetti-cannon";
 import theme from "../data/color-theme";
 import { useTaskManager } from "../hooks/useTaskManager";
 import { useTimer } from "../context/TimerContext";
+import { routeNames } from "../navigation/TabNavigator";
 
 const { width } = Dimensions.get("window");
 const SIZE = width * 0.8;
@@ -68,7 +69,7 @@ export default function FocusScreen() {
     };
 
     const handleKeepItUp = () => {
-        navigation.replace("FocusSetupScreen");
+        navigation.replace(routeNames.home);
     };
 
     const toggleTimer = () => {

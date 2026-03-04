@@ -3,8 +3,9 @@ import HomeScreen from "../screens/HomeScreen";
 import TaskScreen from "../screens/TaskScreen";
 import CalendarScreen from "../screens/CalendarScreen";
 import theme from "../data/color-theme";
-import { CalendarDays, LayoutDashboard, ListTodo } from "lucide-react-native";
+import { CalendarDays, LayoutDashboard, ListTodo, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import SettingScreen from "../screens/SettingScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -12,6 +13,7 @@ export const routeNames = {
     home: "Home",
     tasks: "Tasks",
     calendar: "Calendar",
+    settings: "Settings",
 };
 export default function TabNavigator() {
     const insets = useSafeAreaInsets();
@@ -60,6 +62,15 @@ export default function TabNavigator() {
                     tabBarLabel: "Calendar",
                     tabBarIcon: ({ focused }) => (
                         <CalendarDays color={focused ? theme.text : theme.text + "60"} size={22} />
+                    ),
+                }}
+            />
+            <Tab.Screen
+                name={routeNames.settings}
+                component={SettingScreen}
+                options={{
+                    tabBarIcon: ({ focused }) => (
+                        <Settings color={focused ? theme.text : theme.text + "60"} size={22} />
                     ),
                 }}
             />

@@ -5,6 +5,8 @@ import { StatusBar } from "react-native";
 import TabNavigator from "./src/navigation/TabNavigator";
 import FocusSetupScreen from "./src/screens/FocusSetupScreen";
 import FocusScreen from "./src/screens/FocusScreen";
+import AnalyticsScreen from "./src/screens/AnalyticsScreen";
+import HelpSupportScreen from "./src/screens/HelpSupportScreen";
 import customTheme from "./src/data/color-theme";
 import { TimerProvider } from "./src/context/TimerContext";
 import GlobalCelebration from "./src/components/GlobalCelebration";
@@ -31,6 +33,8 @@ export default function App(): JSX.Element {
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="FocusSetupScreen" component={FocusSetupScreen} />
           <Stack.Screen name="FocusScreen" component={FocusScreen} />
+          <Stack.Screen name="AnalyticsScreen" component={AnalyticsScreen} />
+          <Stack.Screen name="HelpSupportScreen" component={HelpSupportScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </TimerProvider>

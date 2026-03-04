@@ -5,7 +5,7 @@ const color_theme = {
         1: "#FFECA0",
         2: "#CFE9BC",
         3: "#BBE7EF",
-        4: "#ff8c6fff"
+        4: "#ff8c6f"
     },
     white: "#ffffff",
     error: "#ffa6a6",
