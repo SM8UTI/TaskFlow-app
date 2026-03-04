@@ -7,6 +7,7 @@ import FocusSetupScreen from "./src/screens/FocusSetupScreen";
 import FocusScreen from "./src/screens/FocusScreen";
 import AnalyticsScreen from "./src/screens/AnalyticsScreen";
 import HelpSupportScreen from "./src/screens/HelpSupportScreen";
+import CalendarScreen from "./src/screens/CalendarScreen";
 import customTheme from "./src/data/color-theme";
 import { TimerProvider } from "./src/context/TimerContext";
 import GlobalCelebration from "./src/components/GlobalCelebration";
@@ -35,6 +36,7 @@ export default function App(): JSX.Element {
           <Stack.Screen name="FocusScreen" component={FocusScreen} />
           <Stack.Screen name="AnalyticsScreen" component={AnalyticsScreen} />
           <Stack.Screen name="HelpSupportScreen" component={HelpSupportScreen} />
+          <Stack.Screen name="CalendarScreen" component={CalendarScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </TimerProvider>

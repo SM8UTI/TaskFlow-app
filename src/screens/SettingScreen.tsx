@@ -4,9 +4,8 @@ import { useNavigation } from "@react-navigation/native";
 import {
     Info,
     BarChart2,
-    Shield,
+    CalendarDays,
     Cpu,
-    Lock,
     ChevronRight,
     ExternalLink,
     HelpCircle,
@@ -171,6 +170,23 @@ function SettingScreen() {
                         onPress={() => navigation.navigate("AnalyticsScreen")}
                         rightElement={
                             <ExternalLink size={16} color={theme.primary[3]} strokeWidth={2} />
+                        }
+                    />
+                    <View
+                        style={{
+                            height: 1,
+                            backgroundColor: theme.text + "0D",
+                            marginHorizontal: 16,
+                        }}
+                    />
+                    <SettingRow
+                        label="Calendar"
+                        sublabel="View tasks by date & schedule"
+                        icon={CalendarDays}
+                        iconColor={theme.primary[1]}
+                        onPress={() => navigation.navigate("CalendarScreen")}
+                        rightElement={
+                            <ExternalLink size={16} color={theme.primary[1]} strokeWidth={2} />
                         }
                     />
                 </View>
