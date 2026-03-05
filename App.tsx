@@ -11,6 +11,7 @@ import CalendarScreen from "./src/screens/CalendarScreen";
 import customTheme from "./src/data/color-theme";
 import { TimerProvider } from "./src/context/TimerContext";
 import GlobalCelebration from "./src/components/GlobalCelebration";
+import { ShareIntentHandler } from "./src/presentation/ShareIntentHandler";
 
 const AppTheme = {
   ...DefaultTheme,
@@ -30,6 +31,7 @@ export default function App(): JSX.Element {
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <NavigationContainer theme={AppTheme}>
         <GlobalCelebration />
+        <ShareIntentHandler />
         <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: customTheme.background } }}>
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="FocusSetupScreen" component={FocusSetupScreen} />

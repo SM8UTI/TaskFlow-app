@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Linking } from "react-native";
 import {
     CalendarClock,
     Calendar1,
@@ -14,6 +14,8 @@ import { Task, PRIORITY_CONFIG } from "./TaskCard";
 import { useTimer } from "../context/TimerContext";
 import { useNavigation } from "@react-navigation/native";
 import { TouchableOpacity } from "react-native";
+import { extractYouTubeId, hideYouTubeUrl } from "../utils/youtube";
+import YouTubePreview from "./YouTubePreview";
 
 // ─── Status cycling helpers ────────────────────────────────────────────────
 const STATUS_ORDER = ["to-do", "in-progress", "completed"] as const;
@@ -93,6 +95,7 @@ export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDele
     const advanceCfg = getAdvanceCfg(task.status);
     const priorityCfg = PRIORITY_CONFIG[task.priority] ?? null;
     const statusCfg = STATUS_CONFIG[task.status] ?? STATUS_CONFIG["to-do"];
+    const youtubeId = extractYouTubeId(task.description);
 
     return (
         <View style={{ paddingHorizontal: 24, paddingBottom: 8, paddingTop: 20 }}>
@@ -178,12 +181,33 @@ export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDele
                 borderRadius: 12,
                 marginBottom: 12,
             }}>
-                <Text style={{
-                    fontFamily: theme.fonts[600],
-                    fontSize: 18,
-                    color: theme.background + "90",
-                    lineHeight: 32,
-                }}>{task.description}</Text>
+                {youtubeId && <YouTubePreview youtubeId={youtubeId} textColor={theme.background} bgColor={theme.background + "20"} />}
+                {!!hideYouTubeUrl(task.description) && (
+                    <Text style={{
+                        fontFamily: theme.fonts[600],
+                        fontSize: 18,
+                        color: theme.background + "90",
+                        lineHeight: 32,
+                    }}>
+                        {hideYouTubeUrl(task.description).split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+                            if (part.match(/(https?:\/\/[^\s]+)/g)) {
+                                return (
+                                    <Text
+                                        key={index}
+                                        style={{ textDecorationLine: 'underline', color: theme.primary?.[4] || theme.background }}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            Linking.openURL(part).catch(err => console.log("Couldn't load page", err));
+                                        }}
+                                    >
+                                        {part}
+                                    </Text>
+                                );
+                            }
+                            return part;
+                        })}
+                    </Text>
+                )}
             </View>
             <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 24 }}>
                 {/* Timer Pill */}

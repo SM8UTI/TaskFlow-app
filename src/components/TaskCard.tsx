@@ -6,6 +6,8 @@ import {
     Animated,
     PanResponder,
     Dimensions,
+    Image,
+    Linking,
 } from "react-native";
 import theme from "../data/color-theme";
 import {
@@ -19,6 +21,8 @@ import {
 } from "lucide-react-native";
 import { useTimer } from "../context/TimerContext";
 import { useNavigation } from "@react-navigation/native";
+import { extractYouTubeId, hideYouTubeUrl } from "../utils/youtube";
+import YouTubePreview from "./YouTubePreview";
 
 // ─── Task type ───────────────────────────────────────────────────────────────
 export type Task = {
@@ -80,6 +84,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const ABSOLUTE_FILL = { position: "absolute" as const, top: 0, left: 0, right: 0, bottom: 0 };
 
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 type TaskCardProps = {
     task: Task;
@@ -104,6 +109,11 @@ export default function TaskCard({
     const pan = useRef(new Animated.Value(0)).current;
     const [dismissed, setDismissed] = useState(false);
     const [showStatusMenu, setShowStatusMenu] = useState(false);
+
+    // Store latest callbacks to avoid stale closures in PanResponder
+    const latestCallbacks = useRef({ onAdvanceStatus, onComplete, onDelete });
+    latestCallbacks.current = { onAdvanceStatus, onComplete, onDelete };
+
     const { timeLeft, isActive, activeTaskId } = useTimer();
     const navigation = useNavigation<any>();
 
@@ -116,6 +126,7 @@ export default function TaskCard({
 
     const priorityCfg = PRIORITY_CONFIG[task.priority] ?? null;
     const swipeRightLabel = getSwipeRightLabel(task.status);
+    const youtubeId = extractYouTubeId(task.description);
 
     // ── PanResponder ──────────────────────────────────────────────────────
     const panResponder = useRef(
@@ -129,10 +140,18 @@ export default function TaskCard({
             onPanResponderRelease: (_, gs) => {
                 if (gs.dx > SWIPE_THRESHOLD) {
                     Animated.timing(pan, { toValue: SCREEN_WIDTH, duration: 250, useNativeDriver: true })
-                        .start(() => { setDismissed(true); onAdvanceStatus?.() ?? onComplete?.(); });
+                        .start(() => {
+                            setDismissed(true);
+                            const cbs = latestCallbacks.current;
+                            if (cbs.onAdvanceStatus) cbs.onAdvanceStatus();
+                            else if (cbs.onComplete) cbs.onComplete();
+                        });
                 } else if (gs.dx < -SWIPE_THRESHOLD) {
                     Animated.timing(pan, { toValue: -SCREEN_WIDTH, duration: 250, useNativeDriver: true })
-                        .start(() => { setDismissed(true); onDelete?.(); });
+                        .start(() => {
+                            setDismissed(true);
+                            latestCallbacks.current.onDelete?.();
+                        });
                 } else {
                     Animated.spring(pan, { toValue: 0, useNativeDriver: true, bounciness: 12, speed: 20 }).start();
                 }
@@ -216,20 +235,43 @@ export default function TaskCard({
                         overflow: "hidden",
                     }}
                 >
+                    {/* ── YouTube Thumbnail ─────────────── */}
+                    {youtubeId && <YouTubePreview youtubeId={youtubeId} textColor={theme.background} bgColor={theme.background + "20"} />}
+
                     {/* ── Description ───────────────────── */}
-                    <Text style={{ fontFamily: theme.fonts[600], fontSize: 22, color: theme.background, lineHeight: 28 }} numberOfLines={2}>
-                        {task.description}
-                    </Text>
+                    {!!hideYouTubeUrl(task.description) && (
+                        <Text style={{ fontFamily: theme.fonts[600], fontSize: 22, color: theme.background, lineHeight: 28 }} numberOfLines={2}>
+                            {hideYouTubeUrl(task.description).split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+                                if (part.match(/(https?:\/\/[^\s]+)/g)) {
+                                    return (
+                                        <Text
+                                            key={index}
+                                            style={{ textDecorationLine: 'underline' }}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                Linking.openURL(part).catch(err => console.log("Couldn't load page", err));
+                                            }}
+                                        >
+                                            {part}
+                                        </Text>
+                                    );
+                                }
+                                return part;
+                            })}
+                        </Text>
+                    )}
 
                     {/* ── Title ─────────────────────────── */}
                     <Text style={{ fontFamily: theme.fonts[400], fontSize: 16, color: theme.background + "94", lineHeight: 26 }} numberOfLines={1}>
-                        {task.title.split("-")[1]?.trim() || task.title}
+                        {youtubeId ? task.title : (task.title.split("-")[1]?.trim() || task.title)}
                     </Text>
 
                     {/* ── Bottom section: tags + priority ── */}
                     <View style={{ borderTopWidth: 1, borderColor: theme.background + "20", paddingTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        {/* Tags — max 2 visible, then "+N" overflow */}
+                        {/* Tags & Attachments */}
                         <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", flex: 1, alignItems: "center" }}>
+
+                            {/* Tags — max 2 visible, then "+N" overflow */}
                             {task.tag?.slice(0, 2).map((tagName: string, i: number) => (
                                 <Text key={i} style={{ fontFamily: theme.fonts[500], fontSize: 13, color: theme.background + "80", textTransform: "capitalize" }}>
                                     #{tagName}

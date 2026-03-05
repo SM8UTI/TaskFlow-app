@@ -29,9 +29,10 @@ type Props = {
     visible: boolean;
     onClose: () => void;
     onSave: (task: NewTaskData) => void;
+    initialTaskData?: { title?: string, description?: string };
 };
 
-export default function AddTaskBottomSheet({ visible, onClose, onSave }: Props) {
+export default function AddTaskBottomSheet({ visible, onClose, onSave, initialTaskData }: Props) {
     const slideAnim = useRef(new Animated.Value(0)).current;
 
     const [title, setTitle] = useState("");
@@ -47,8 +48,8 @@ export default function AddTaskBottomSheet({ visible, onClose, onSave }: Props) 
     useEffect(() => {
         if (visible) {
             setIsMounted(true);
-            setTitle("");
-            setDescription("");
+            setTitle(initialTaskData?.title || "");
+            setDescription(initialTaskData?.description || "");
             setTags([]);
             setCurrentTag("");
             setPriority("medium");
@@ -62,7 +63,7 @@ export default function AddTaskBottomSheet({ visible, onClose, onSave }: Props) 
         } else if (isMounted) {
             closeSheet();
         }
-    }, [visible]);
+    }, [visible, initialTaskData]);
 
     const closeSheet = () => {
         Animated.timing(slideAnim, {
