@@ -9,6 +9,13 @@ import theme from "../data/color-theme";
 import { useTaskManager } from "../hooks/useTaskManager";
 import { useTimer } from "../context/TimerContext";
 import { routeNames } from "../navigation/TabNavigator";
+import {
+    showFocusCompleteNotification,
+    showActiveFocusNotification,
+    cancelActiveFocusNotification,
+    scheduleFocusCompletionNotification,
+    cancelScheduledFocusCompletion,
+} from "../services/NotificationService";
 
 const { width } = Dimensions.get("window");
 const SIZE = width * 0.8;
@@ -38,12 +45,49 @@ export default function FocusScreen() {
     const [showConfetti, setShowConfetti] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-    // Animation value for progress
-    // Animation value for progress
+    // Animation value for progress arc
     const animatedProgress = useRef(new Animated.Value(timeLeft)).current;
 
+    // ── On mount: show the active-session badge + schedule background completion ─
+    useEffect(() => {
+        if (isActive) {
+            // 1. Persistent badge so user knows a session is running
+            showActiveFocusNotification(taskTitle, false);
+            // 2. Alarm-manager trigger fires at endTime even if the app is killed
+            const endTimestamp = Date.now() + timeLeft * 1000;
+            scheduleFocusCompletionNotification(taskTitle, endTimestamp);
+        } else {
+            // Screen opened while paused (e.g. navigated back) — show paused state
+            showActiveFocusNotification(taskTitle, true);
+        }
+
+        // Clean up badge when user leaves the screen without finishing
+        return () => {
+            cancelActiveFocusNotification();
+            // NOTE: we intentionally leave the scheduled trigger alive here.
+            // If the user leaves mid-session, the alarm will still fire at endTime.
+            // It gets cancelled explicitly only on reset/skip/completion.
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ── Pause: cancel scheduled trigger (timer is frozen), update badge ─────────
+    // ── Resume: re-schedule trigger at new endTime, update badge ────────────────
+    useEffect(() => {
+        if (timeLeft <= 0) return;
+        if (isActive) {
+            // Timer resumed — reschedule the trigger from the current timeLeft
+            const endTimestamp = Date.now() + timeLeft * 1000;
+            scheduleFocusCompletionNotification(taskTitle, endTimestamp);
+            showActiveFocusNotification(taskTitle, false);
+        } else {
+            // Timer paused — cancel the trigger so it doesn't fire while frozen
+            cancelScheduledFocusCompletion();
+            showActiveFocusNotification(taskTitle, true);
+        }
+    }, [isActive]);
+
     // Detect completion when timeLeft hits 0 naturally from an active state
-    // We can do this by tracking previous time
     const prevTimeLeft = useRef(timeLeft);
     useEffect(() => {
         if (prevTimeLeft.current > 0 && timeLeft === 0 && !isActive) {
@@ -66,6 +110,11 @@ export default function FocusScreen() {
         if (taskId != null) {
             await setTaskStatus(taskId, "completed");
         }
+        // Cancel the badge and the AlarmManager trigger (session is done in-app).
+        // Then show the instant celebratory notification.
+        await cancelActiveFocusNotification();
+        await cancelScheduledFocusCompletion();
+        await showFocusCompleteNotification(taskTitle);
     };
 
     const handleKeepItUp = () => {
@@ -80,12 +129,16 @@ export default function FocusScreen() {
     const resetTimer = () => {
         contextResetTimer();
         animatedProgress.setValue(TOTAL_SECONDS);
-        setShowConfetti(false); // reset confetti just in case
+        setShowConfetti(false);
+        // Cancel both the badge and the scheduled alarm
+        cancelActiveFocusNotification();
+        cancelScheduledFocusCompletion();
     };
 
     const skipTimer = () => {
         endTimer();
         animatedProgress.setValue(0);
+        // handleCompletion cancels both badge + trigger and shows the finish notification
         handleCompletion();
     };
 

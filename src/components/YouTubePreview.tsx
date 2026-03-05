@@ -7,9 +7,11 @@ type Props = {
     youtubeId: string;
     textColor?: string;
     bgColor?: string;
+    /** Set false to hide the title/author info row below the thumbnail */
+    showMeta?: boolean;
 };
 
-export default function YouTubePreview({ youtubeId, textColor = theme.text, bgColor = theme.white + "05" }: Props) {
+export default function YouTubePreview({ youtubeId, textColor = theme.text, bgColor = theme.white + "05", showMeta = true }: Props) {
     const [meta, setMeta] = useState<{ title: string; author: string } | null>(null);
 
     useEffect(() => {
@@ -43,24 +45,26 @@ export default function YouTubePreview({ youtubeId, textColor = theme.text, bgCo
                     </View>
                 </Pressable>
             </View>
-            <View style={{ padding: 12, backgroundColor: bgColor, flexDirection: "column", gap: 24 }}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                    {meta ? (
-                        <>
-                            <Text style={{ fontFamily: theme.fonts[600], fontSize: 14, color: textColor, marginBottom: 2 }} numberOfLines={2}>
-                                {meta.title}
+            {showMeta && (
+                <View style={{ padding: 12, backgroundColor: bgColor, flexDirection: "column", gap: 24 }}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                        {meta ? (
+                            <>
+                                <Text style={{ fontFamily: theme.fonts[600], fontSize: 14, color: textColor, marginBottom: 2 }} numberOfLines={2}>
+                                    {meta.title}
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts[500], fontSize: 12, color: textColor + "70" }} numberOfLines={1}>
+                                    {meta.author}
+                                </Text>
+                            </>
+                        ) : (
+                            <Text style={{ fontFamily: theme.fonts[600], fontSize: 14, color: textColor }} numberOfLines={1}>
+                                YouTube Video
                             </Text>
-                            <Text style={{ fontFamily: theme.fonts[500], fontSize: 12, color: textColor + "70" }} numberOfLines={1}>
-                                {meta.author}
-                            </Text>
-                        </>
-                    ) : (
-                        <Text style={{ fontFamily: theme.fonts[600], fontSize: 14, color: textColor }} numberOfLines={1}>
-                            YouTube Video
-                        </Text>
-                    )}
+                        )}
+                    </View>
                 </View>
-            </View>
+            )}
         </View>
     );
 }

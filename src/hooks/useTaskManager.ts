@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { NewTaskData } from '../components/AddTaskBottomSheet';
 import { encryptObject, decryptObject } from '../utils/security';
+import { scheduleTaskReminder } from '../services/NotificationService';
 
 const TASKS_STORAGE_KEY = '@myapp_tasks_data';
 
@@ -141,6 +142,16 @@ export function useTaskManager() {
       }
       return updatedTasks;
     });
+
+    // Auto-schedule a local reminder if the task has a future due date
+    if (data.dueDate && data.dueDate.getTime() > Date.now()) {
+      scheduleTaskReminder(data.title, data.dueDate.getTime()).catch(err =>
+        console.error(
+          '[useTaskManager] Failed to schedule task reminder:',
+          err,
+        ),
+      );
+    }
 
     onSuccess?.();
   };

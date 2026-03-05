@@ -171,13 +171,15 @@ export default function TaskCard({
             <Animated.View style={[
                 ABSOLUTE_FILL,
                 {
-                    backgroundColor: theme.background,
+                    backgroundColor: theme.white + "05",
                     borderRadius: theme.border.radius.main,
                     flexDirection: "row",
                     alignItems: "center",
                     paddingLeft: 24,
                     opacity: pan.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1], extrapolate: "clamp" }),
                     transform: [{ scale: pan.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0.95, 1], extrapolate: "clamp" }) }],
+                    borderWidth: 1,
+                    borderColor: theme.white + "10",
                 },
             ]}>
                 <View style={{ backgroundColor: theme.white + "20", height: 48, width: 48, borderRadius: 24, justifyContent: "center", alignItems: "center" }}>
@@ -192,7 +194,7 @@ export default function TaskCard({
             <Animated.View style={[
                 ABSOLUTE_FILL,
                 {
-                    backgroundColor: theme.background,
+                    backgroundColor: theme.white + "05",
                     borderRadius: theme.border.radius.main,
                     flexDirection: "row",
                     alignItems: "center",
@@ -200,6 +202,8 @@ export default function TaskCard({
                     paddingRight: 24,
                     opacity: pan.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0], extrapolate: "clamp" }),
                     transform: [{ scale: pan.interpolate({ inputRange: [-SWIPE_THRESHOLD, 0], outputRange: [1, 0.95], extrapolate: "clamp" }) }],
+                    borderWidth: 1,
+                    borderColor: theme.white + "10",
                 },
             ]}>
                 <Text style={{ fontFamily: theme.fonts[600], fontSize: 16, color: theme.error, marginRight: 16 }}>

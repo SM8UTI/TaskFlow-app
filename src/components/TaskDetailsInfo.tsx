@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, Linking } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Linking, TouchableOpacity } from "react-native";
 import {
     CalendarClock,
     Calendar1,
@@ -7,26 +7,20 @@ import {
     ChevronsRight,
     Trash2,
     Play,
+    Tag,
+    Youtube,
 } from "lucide-react-native";
 import theme from "../data/color-theme";
 import AnimatedIconButton from "./AnimatedIconButton";
 import { Task, PRIORITY_CONFIG } from "./TaskCard";
 import { useTimer } from "../context/TimerContext";
 import { useNavigation } from "@react-navigation/native";
-import { TouchableOpacity } from "react-native";
 import { extractYouTubeId, hideYouTubeUrl } from "../utils/youtube";
 import YouTubePreview from "./YouTubePreview";
 
-// ─── Status cycling helpers ────────────────────────────────────────────────
+// ─── Status cycling helpers ────────────────────────────────────────────────────
 const STATUS_ORDER = ["to-do", "in-progress", "completed"] as const;
 type TaskStatus = (typeof STATUS_ORDER)[number];
-
-const getTomorrow = (): Date => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
-    return d;
-};
 
 type AdvanceCfg = { label: string; color: string; Icon: React.ReactNode };
 
@@ -43,7 +37,6 @@ const getAdvanceCfg = (status: string): AdvanceCfg => {
             color: theme.success,
             Icon: <CheckCircle color={theme.white} size={18} />,
         };
-    // completed → reschedule to tomorrow
     return {
         label: "Reschedule for Tomorrow",
         color: "#4A7FD6",
@@ -51,14 +44,14 @@ const getAdvanceCfg = (status: string): AdvanceCfg => {
     };
 };
 
-// ─── Status display config ───────────────────────────────────────────────────
+// ─── Status display config ─────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     "to-do": { label: "To Do", color: "#888888", bg: "#88888818" },
     "in-progress": { label: "In Progress", color: "#4A7FD6", bg: "#4A7FD618" },
-    "completed": { label: "Completed", color: "#003e28ff", bg: "#34D39918" },
+    "completed": { label: "Completed", color: "#34D399", bg: "#34D39918" },
 };
 
-// ─── Date label ─────────────────────────────────────────────────────────────
+// ─── Date helpers ──────────────────────────────────────────────────────────────
 const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 const getDateLabel = (dueDate: Date | string): string => {
@@ -71,16 +64,15 @@ const getDateLabel = (dueDate: Date | string): string => {
     return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 };
 
-// ─── Props ──────────────────────────────────────────────────────────────────
+// ─── Props ─────────────────────────────────────────────────────────────────────
 type TaskProps = {
     task: Task;
     onClose: () => void;
-    /** Cycles status: to-do → in-progress → completed → to-do (tomorrow) */
     onAdvanceStatus?: () => void;
     onDelete?: () => void;
 };
 
-// ─── Component ──────────────────────────────────────────────────────────────
+// ─── Component ─────────────────────────────────────────────────────────────────
 export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDelete }: TaskProps) {
     const tDate = new Date(task.dueDate);
     const timeStr = tDate.toLocaleTimeString("en-US", {
@@ -96,158 +88,93 @@ export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDele
     const priorityCfg = PRIORITY_CONFIG[task.priority] ?? null;
     const statusCfg = STATUS_CONFIG[task.status] ?? STATUS_CONFIG["to-do"];
     const youtubeId = extractYouTubeId(task.description);
+    const descriptionText = hideYouTubeUrl(task.description);
+    const isTimerActiveForTask = isActive && activeTaskId === task.id;
+
+    // Fetch YouTube oEmbed metadata for the prominent info block
+    const [ytMeta, setYtMeta] = useState<{ title: string; author: string } | null>(null);
+    useEffect(() => {
+        if (!youtubeId) return;
+        setYtMeta(null);
+        let alive = true;
+        fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${youtubeId}&format=json`)
+            .then(r => r.json())
+            .then(data => {
+                if (alive && data?.title) {
+                    setYtMeta({ title: data.title, author: data.author_name });
+                }
+            })
+            .catch(() => { });
+        return () => { alive = false; };
+    }, [youtubeId]);
 
     return (
         <View style={{ paddingHorizontal: 24, paddingBottom: 8, paddingTop: 20 }}>
-            {/* ── Top row: date + priority + status ─────────── */}
+
+            {/* ── Title + date row ────────────────────────────────────────────── */}
+            <Text style={{
+                fontFamily: theme.fonts[700],
+                fontSize: 22,
+                color: theme.background,
+                lineHeight: 30,
+                marginBottom: 8,
+            }}>
+                {task.title}
+            </Text>
+
+            {/* ── Meta row: date, priority, status pills ──────────────────────── */}
             <View style={{
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 20,
                 flexWrap: "wrap",
-                gap: 12,
+                gap: 8,
+                marginBottom: 20,
             }}>
-
-
+                {/* Date pill */}
                 <View style={{
-                    flexDirection: "column",
-                    gap: 2,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    backgroundColor: theme.background + "0C",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 20,
                 }}>
+                    <Calendar1 size={13} color={theme.background + "70"} />
                     <Text style={{
                         fontFamily: theme.fonts[500],
-                        fontSize: 16,
-                        color: theme.background + "90",
-                        marginBottom: 2,
-                        lineHeight: 40,
-                    }}>{task.title}</Text>
-                    <View style={{
-                        flexDirection: "row",
-                        gap: 6,
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        width: "100%"
+                        fontSize: 13,
+                        color: theme.background + "80",
                     }}>
-                        <View style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 6,
-                        }}>
-                            <Calendar1 size={14} color={theme.background + "80"} />
-                            <Text style={{
-                                fontFamily: theme.fonts[500],
-                                fontSize: 14,
-                                color: theme.background + "88",
-                            }}>
-                                {dateLabel}, {timeStr}
-                            </Text>
-                        </View>
-                        {/* Priority pill */}
-                        {priorityCfg && (
-                            <View style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 5,
-                                paddingHorizontal: 10,
-                                paddingVertical: 5,
-                                borderRadius: 20,
-                                backgroundColor: priorityCfg.bg
-                            }}>
-                                <View style={{
-                                    width: 7,
-                                    height: 7,
-                                    borderRadius: 4,
-                                    backgroundColor: priorityCfg.dot
-                                }} />
-                                <Text style={{
-                                    fontFamily: theme.fonts[600],
-                                    fontSize: 12,
-                                    color: priorityCfg.dot
-                                }}>
-                                    {priorityCfg.label}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
+                        {dateLabel}, {timeStr}
+                    </Text>
                 </View>
 
-
-
-
-            </View>
-            <View style={{
-                backgroundColor: theme.background + "10",
-                padding: 24,
-                borderRadius: 12,
-                marginBottom: 12,
-            }}>
-                {youtubeId && <YouTubePreview youtubeId={youtubeId} textColor={theme.background} bgColor={theme.background + "20"} />}
-                {!!hideYouTubeUrl(task.description) && (
-                    <Text style={{
-                        fontFamily: theme.fonts[600],
-                        fontSize: 18,
-                        color: theme.background + "90",
-                        lineHeight: 32,
+                {/* Priority pill — matches TaskCard style exactly */}
+                {priorityCfg && (
+                    <View style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 5,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                        backgroundColor: priorityCfg.bg,
                     }}>
-                        {hideYouTubeUrl(task.description).split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
-                            if (part.match(/(https?:\/\/[^\s]+)/g)) {
-                                return (
-                                    <Text
-                                        key={index}
-                                        style={{ textDecorationLine: 'underline', color: theme.primary?.[4] || theme.background }}
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            Linking.openURL(part).catch(err => console.log("Couldn't load page", err));
-                                        }}
-                                    >
-                                        {part}
-                                    </Text>
-                                );
-                            }
-                            return part;
-                        })}
-                    </Text>
-                )}
-            </View>
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 24 }}>
-                {/* Timer Pill */}
-                {task.status !== "completed" && (
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                            // First close the modal, then navigate
-                            onClose();
-                            setTimeout(() => {
-                                if (isActive && activeTaskId === task.id) {
-                                    navigation.navigate("FocusScreen", { taskId: task.id, duration: Math.floor(timeLeft / 60) });
-                                } else {
-                                    navigation.navigate("FocusSetupScreen", { taskId: task.id });
-                                }
-                            }, 300); // Wait for modal to close
-                        }}
-                    >
                         <View style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 5,
-                            paddingHorizontal: 10,
-                            paddingVertical: 5,
-                            borderRadius: 20,
-                            backgroundColor: isActive && activeTaskId === task.id ? theme.primary[4] : theme.background + "10"
+                            width: 7,
+                            height: 7,
+                            borderRadius: 4,
+                            backgroundColor: priorityCfg.dot,
+                        }} />
+                        <Text style={{
+                            fontFamily: theme.fonts[500],
+                            fontSize: 13,
+                            color: priorityCfg.dot,
                         }}>
-                            <Play fill={isActive && activeTaskId === task.id ? theme.white : theme.background + "80"} color={isActive && activeTaskId === task.id ? theme.white : theme.background + "80"} size={10} />
-                            <Text style={{
-                                fontFamily: theme.fonts[600],
-                                fontSize: 13,
-                                color: isActive && activeTaskId === task.id ? theme.white : theme.background + "80",
-                                marginLeft: 2
-                            }}>
-                                {isActive && activeTaskId === task.id
-                                    ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`
-                                    : "Focus"}
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
+                            {priorityCfg.label.split(" ")[0]}
+                        </Text>
+                    </View>
                 )}
 
                 {/* Status pill */}
@@ -256,52 +183,197 @@ export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDele
                     alignItems: "center",
                     gap: 5,
                     paddingHorizontal: 10,
-                    paddingVertical: 5,
+                    paddingVertical: 6,
                     borderRadius: 20,
-                    backgroundColor: statusCfg.bg
+                    backgroundColor: statusCfg.bg,
                 }}>
                     <View style={{
                         width: 7,
                         height: 7,
                         borderRadius: 4,
-                        backgroundColor: statusCfg.color
+                        backgroundColor: statusCfg.color,
                     }} />
                     <Text style={{
-                        fontFamily: theme.fonts[600],
-                        fontSize: 12,
-                        color: statusCfg.color
+                        fontFamily: theme.fonts[500],
+                        fontSize: 13,
+                        color: statusCfg.color,
                     }}>
                         {statusCfg.label}
                     </Text>
                 </View>
 
+                {/* Focus / timer pill — matches TaskCard pill exactly */}
+                {task.status !== "completed" && (
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                            onClose();
+                            setTimeout(() => {
+                                if (isTimerActiveForTask) {
+                                    navigation.navigate("FocusScreen", {
+                                        taskId: task.id,
+                                        duration: Math.floor(timeLeft / 60),
+                                        taskTitle: task.title,
+                                    });
+                                } else {
+                                    navigation.navigate("FocusSetupScreen", { taskId: task.id });
+                                }
+                            }, 300);
+                        }}
+                        style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 5,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 20,
+                            // matches TaskCard: white bg when active, dark when idle
+                            backgroundColor: isTimerActiveForTask
+                                ? theme.background
+                                : theme.background + "10",
+                        }}
+                    >
+                        <Play
+                            fill={isTimerActiveForTask ? theme.white : theme.background + "70"}
+                            color={isTimerActiveForTask ? theme.white : theme.background + "70"}
+                            size={10}
+                        />
+                        <Text style={{
+                            fontFamily: theme.fonts[700],
+                            fontSize: 13,
+                            color: isTimerActiveForTask ? theme.white : theme.background + "80",
+                        }}>
+                            {isTimerActiveForTask
+                                ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, "0")}`
+                                : "Focus"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
+            {/* ── YouTube preview + description card ──────────────────────────── */}
+            {(youtubeId || !!descriptionText) && (
+                <View style={{
+                    backgroundColor: theme.background + "08",
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.background + "10",
+                    marginBottom: 16,
+                    overflow: "hidden",
+                }}>
+                    {/* Thumbnail — YouTubePreview without its own meta text so we render ours */}
+                    {youtubeId && (
+                        <YouTubePreview
+                            youtubeId={youtubeId}
+                            textColor={theme.background}
+                            bgColor={theme.background + "08"}
+                            showMeta={false}
+                        />
+                    )}
 
+                    {/* ── YouTube info block (title + channel) ────────────── */}
+                    {youtubeId && (
+                        <View style={{
+                            paddingHorizontal: 14,
+                            paddingTop: 4,
+                            paddingBottom: 14,
+                            gap: 6,
+                        }}>
+                            {/* Video title */}
+                            <Text style={{
+                                fontFamily: theme.fonts[700],
+                                fontSize: 15,
+                                color: theme.background,
+                                lineHeight: 22,
+                            }} numberOfLines={2}>
+                                {ytMeta ? ytMeta.title : "Loading video title…"}
+                            </Text>
+                            {/* Channel name row with YouTube icon */}
+                            <View style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 6,
+                            }}>
+                                <Youtube size={13} color="#FF0000" />
+                                <Text style={{
+                                    fontFamily: theme.fonts[500],
+                                    fontSize: 13,
+                                    color: theme.background + "70",
+                                }} numberOfLines={1}>
+                                    {ytMeta ? ytMeta.author : "YouTube"}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
 
-            {/* ── Tags ─────────────────────────────────────── */}
+                    {/* Description text */}
+                    {!!descriptionText && (
+                        <Text style={{
+                            fontFamily: theme.fonts[500],
+                            fontSize: 15,
+                            color: theme.background + "90",
+                            lineHeight: 24,
+                            padding: 16,
+                            paddingTop: youtubeId ? 0 : 16,
+                        }}>
+                            {descriptionText.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+                                if (part.match(/(https?:\/\/[^\s]+)/g)) {
+                                    return (
+                                        <Text
+                                            key={index}
+                                            style={{
+                                                textDecorationLine: "underline",
+                                                color: theme.primary?.[4] || theme.background,
+                                            }}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                Linking.openURL(part).catch(err =>
+                                                    console.log("Couldn't load page", err)
+                                                );
+                                            }}
+                                        >
+                                            {part}
+                                        </Text>
+                                    );
+                                }
+                                return part;
+                            })}
+                        </Text>
+                    )}
+                </View>
+            )}
+
+            {/* ── Tags row ────────────────────────────────────────────────────── */}
             {task.tag && task.tag.length > 0 && (
                 <View style={{
                     flexDirection: "row",
-                    gap: 8,
-                    marginBottom: 24,
+                    gap: 6,
                     flexWrap: "wrap",
-                    borderTopWidth: 1,
-                    borderColor: theme.background + "10",
-                    paddingTop: 16,
+                    alignItems: "center",
+                    marginBottom: 20,
                 }}>
+                    <Tag size={13} color={theme.background + "50"} />
                     {task.tag.map((tag: string, idx: number) => (
-                        <Text key={idx} style={{
-                            fontFamily: theme.fonts[500],
-                            fontSize: 15,
-                            color: theme.background + "80",
-                            textTransform: "capitalize",
-                        }}>#{tag}</Text>
+                        <View key={idx} style={{
+                            backgroundColor: theme.background + "0C",
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 20,
+                        }}>
+                            <Text style={{
+                                fontFamily: theme.fonts[500],
+                                fontSize: 13,
+                                color: theme.background + "70",
+                                textTransform: "capitalize",
+                            }}>
+                                #{tag}
+                            </Text>
+                        </View>
                     ))}
                 </View>
             )}
 
-            {/* ── Action buttons ───────────────────────────── */}
+            {/* ── Action buttons ───────────────────────────────────────────────── */}
             <View style={{
                 flexDirection: "row",
                 gap: 12,
@@ -314,31 +386,33 @@ export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDele
                     <AnimatedIconButton
                         style={{
                             width: "100%",
-                            height: 64,
+                            height: 56,
                             borderRadius: 120,
                             flexDirection: "row",
                             justifyContent: "center",
                             alignItems: "center",
                             gap: 10,
-                            backgroundColor: advanceCfg.color
+                            backgroundColor: advanceCfg.color,
                         }}
                         onPress={onAdvanceStatus}
                     >
                         {advanceCfg.Icon}
                         <Text style={{
-                            fontFamily: theme.fonts[500],
+                            fontFamily: theme.fonts[600],
                             fontSize: 15,
                             color: theme.white,
-                        }}>{advanceCfg.label}</Text>
+                        }}>
+                            {advanceCfg.label}
+                        </Text>
                     </AnimatedIconButton>
                 </View>
 
                 {/* Delete button */}
                 <AnimatedIconButton
                     style={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: 32,
+                        width: 56,
+                        height: 56,
+                        borderRadius: 28,
                         justifyContent: "center",
                         alignItems: "center",
                         borderWidth: 1,
@@ -347,7 +421,7 @@ export default function TaskDetailsInfo({ task, onClose, onAdvanceStatus, onDele
                     }}
                     onPress={onDelete}
                 >
-                    <Trash2 color={theme.error} size={24} />
+                    <Trash2 color={theme.error} size={22} />
                 </AnimatedIconButton>
             </View>
         </View>
