@@ -24,7 +24,7 @@ import { useTaskManager } from "../../hooks/useTaskManager";
 
 function TodayRecentTasks() {
     const navigation = useNavigation<any>();
-    const { tasks, saveNewTask, toggleTaskComplete, deleteTask } = useTaskManager();
+    const { tasks, saveNewTask, toggleTaskComplete, deleteTask, advanceTaskStatus } = useTaskManager();
 
     const [selectedTask, setSelectedTask] = useState<any | null>(null);
     const [sheetVisible, setSheetVisible] = useState(false);
@@ -40,10 +40,10 @@ function TodayRecentTasks() {
 
     const handleToggleComplete = async (taskId: number) => {
         const task = tasks.find(t => t.id === taskId);
-        if (task && task.status !== "completed") {
+        if (task && task.status === "in-progress") {
             setShowConfetti(true);
         }
-        await toggleTaskComplete(taskId);
+        await advanceTaskStatus(taskId);
         if (selectedTask?.id === taskId) {
             closeTaskSheet();
         }

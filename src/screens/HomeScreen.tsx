@@ -11,6 +11,7 @@ import { WidgetPreview } from "react-native-android-widget";
 import { TaskWidgetAndroid } from "../widget/TaskWidget";
 import StartTimerList from "../layouts/homeScreen/StartTimerList";
 import { PrivacyStatus } from "../components/PrivacyStatus";
+import WeeklyFocusWidget from "../layouts/homeScreen/WeeklyFocusWidget";
 
 export default function HomeScreen() {
     const { tasks } = useTaskManager();
@@ -46,6 +47,7 @@ export default function HomeScreen() {
                 <HeaderHeroScreen streak={currentStreak} />
                 <TodayRecentTasks />
                 <StartTimerList />
+                <WeeklyFocusWidget />
             </ScrollView>
         </SafeAreaView>
     );

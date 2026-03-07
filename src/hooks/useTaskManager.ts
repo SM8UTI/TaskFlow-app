@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { NewTaskData } from '../components/AddTaskBottomSheet';
 import { encryptObject, decryptObject } from '../utils/security';
+import { scheduleTaskReminder } from '../services/NotificationService';
 
 const TASKS_STORAGE_KEY = '@myapp_tasks_data';
 
@@ -23,6 +25,10 @@ export function useTaskManager() {
   // Initial load on mount
   useEffect(() => {
     loadTasks();
+    const sub = DeviceEventEmitter.addListener('onTaskCreatedFromShare', () => {
+      loadTasks();
+    });
+    return () => sub.remove();
   }, []);
 
   // Reload tasks whenever the screen is focused
@@ -124,56 +130,78 @@ export function useTaskManager() {
       colorIndex: Math.floor(Math.random() * 3),
     };
 
-    const updatedTasks = [newTask, ...tasks];
-    setTasks(updatedTasks);
-    onSuccess?.();
+    setTasks(prev => {
+      const updatedTasks = [newTask, ...prev];
+      try {
+        const enc = encryptObject(updatedTasks);
+        AsyncStorage.setItem(TASKS_STORAGE_KEY, enc).catch(err =>
+          console.error('Failed to save task', err),
+        );
+      } catch (err) {
+        console.error('Failed to encrypt task', err);
+      }
+      return updatedTasks;
+    });
 
-    try {
-      const encrypted = encryptObject(updatedTasks);
-      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
-    } catch (error) {
-      console.error('Failed to save task', error);
+    // Auto-schedule a local reminder if the task has a future due date
+    if (data.dueDate && data.dueDate.getTime() > Date.now()) {
+      scheduleTaskReminder(data.title, data.dueDate.getTime()).catch(err =>
+        console.error(
+          '[useTaskManager] Failed to schedule task reminder:',
+          err,
+        ),
+      );
     }
+
+    onSuccess?.();
   };
 
   const deleteTask = async (
     taskId: number,
     onTaskDeleted?: (id: number) => void,
   ) => {
-    const filteredTasks = tasks.filter(t => t.id !== taskId);
-    setTasks(filteredTasks);
+    setTasks(prev => {
+      const filteredTasks = prev.filter(t => t.id !== taskId);
+      try {
+        const enc = encryptObject(filteredTasks);
+        AsyncStorage.setItem(TASKS_STORAGE_KEY, enc).catch(err =>
+          console.error('Failed to save task', err),
+        );
+      } catch (err) {
+        console.error('Failed to encrypt task', err);
+      }
+      return filteredTasks;
+    });
     onTaskDeleted?.(taskId);
-    try {
-      const encrypted = encryptObject(filteredTasks);
-      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
-    } catch (error) {
-      console.error('Failed to delete task', error);
-    }
   };
 
   const toggleTaskComplete = async (
     taskId: number,
     onToggled?: (id: number) => void,
   ) => {
-    const updatedTasks = tasks.map(t => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          isCompleted: true,
-          status: 'completed',
-          updatedAt: new Date(),
-        };
+    setTasks(prev => {
+      const updatedTasks = prev.map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            isCompleted: true,
+            status: 'completed',
+            updatedAt: new Date(),
+          };
+        }
+        return t;
+      });
+      try {
+        const enc = encryptObject(updatedTasks);
+        AsyncStorage.setItem(TASKS_STORAGE_KEY, enc).catch(err =>
+          console.error('Failed to save task', err),
+        );
+      } catch (err) {
+        console.error('Failed to encrypt task', err);
       }
-      return t;
+      return updatedTasks;
     });
-    setTasks(updatedTasks);
     onToggled?.(taskId);
-    try {
-      const encrypted = encryptObject(updatedTasks);
-      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
-    } catch (error) {
-      console.error('Failed to toggle task', error);
-    }
   };
 
   /** Generic setter: update status (and optionally dueDate) for any task */
@@ -183,26 +211,30 @@ export function useTaskManager() {
     newDueDate?: Date,
     onDone?: () => void,
   ) => {
-    const updatedTasks = tasks.map(t => {
-      if (t.id === taskId) {
-        return {
-          ...t,
-          status: newStatus,
-          isCompleted: newStatus === 'completed',
-          dueDate: newDueDate ?? t.dueDate,
-          updatedAt: new Date(),
-        };
+    setTasks(prev => {
+      const updatedTasks = prev.map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            status: newStatus,
+            isCompleted: newStatus === 'completed',
+            dueDate: newDueDate ?? t.dueDate,
+            updatedAt: new Date(),
+          };
+        }
+        return t;
+      });
+      try {
+        const enc = encryptObject(updatedTasks);
+        AsyncStorage.setItem(TASKS_STORAGE_KEY, enc).catch(err =>
+          console.error('Failed to save task', err),
+        );
+      } catch (err) {
+        console.error('Failed to encrypt task', err);
       }
-      return t;
+      return updatedTasks;
     });
-    setTasks(updatedTasks);
     onDone?.();
-    try {
-      const encrypted = encryptObject(updatedTasks);
-      await AsyncStorage.setItem(TASKS_STORAGE_KEY, encrypted);
-    } catch (error) {
-      console.error('Failed to set task status', error);
-    }
   };
 
   /** Cycles: to-do → in-progress → completed → to-do (tomorrow) */
